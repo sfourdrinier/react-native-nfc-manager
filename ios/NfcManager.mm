@@ -194,17 +194,28 @@ continueUserActivity:(NSUserActivity *)userActivity
                 // here we treat Ndef is a special case, because all specific tech types
                 // inherites from NFCNDEFTag, so we simply allow it to connect
                 if ([tagType isEqualToString:requestType] || [requestType isEqualToString:@"Ndef"]) {
+                    // Consume the pending callback BEFORE the async connect so a
+                    // concurrent invalidate/cancel/tag-removal can never settle it
+                    // twice (fatal under TurboModules / New Architecture).
                     RCTResponseSenderBlock pendingCallback = techRequestCallback;
+                    techRequestCallback = nil;
 
                     [tagSession connectToTag:tag
                            completionHandler:^(NSError *error) {
                         if (error != nil) {
-                            NSLog(@"NFCTag restarting polling");
-                            [self->tagSession restartPolling];
+                            NSLog(@"NFCTag connect failed: %@", [error localizedDescription]);
+                            // Settle exactly once with the error instead of
+                            // leaving the JS promise hanging across retries.
+                            if (pendingCallback) {
+                                pendingCallback(@[getErrorMessage(error)]);
+                            }
+                            // Restart polling only while the session is still valid.
+                            if (self->tagSession != nil && self->tagSession.valid) {
+                                NSLog(@"NFCTag restarting polling");
+                                [self->tagSession restartPolling];
+                            }
                             return;
                         }
-                        
-                        self->techRequestCallback = nil;
 
                         pendingCallback(@[[NSNull null], requestType]);
                     }];

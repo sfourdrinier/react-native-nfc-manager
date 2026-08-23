@@ -96,3 +96,31 @@
 
 
 
+
+## [4.0.0-beta.7-fork.2] (2026-08-23)
+
+New Architecture (TurboModule) correctness fixes on top of upstream v4.0.0-beta.7.
+Every pending JS callback/promise is now settled **at most once**, and no path
+leaves a promise hanging.
+
+### Fixed — iOS
+- cancelTechnologyRequest now settles any pending equestTechnology promise
+  with a cancelled error before invalidating the session, and clears the
+  stored callback so session-invalidation cannot settle it again.
+- estartTechnologyRequest settles the previous pending callback before
+  overwriting it instead of leaking it forever.
+- invalidateSession always responds (including the no-active-session and
+  pre-iOS-13 paths) so caller promises never hang; an active tag-session
+  invalidation also settles a pending technology request exactly once.
+- didDetectTags consumes the pending callback before the async
+  connectToTag; a connect failure now rejects the request exactly once and
+  restarts polling only while the session is still valid. This removes the
+  tag-removal race that previously hung the request or double-settled it.
+
+### Notes
+- Android already used invoke-once callbacks (invokePendingCallbackWithError)
+  and its 	ransceive handles arbitrary byte arrays for all techs including
+  NfcV — audited, no changes required.
+- iOS iso15693_customCommand returns response bytes unmodified via a single
+  CoreNFC completion handler — audited, no changes required.
+
