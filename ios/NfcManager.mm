@@ -312,8 +312,14 @@ continueUserActivity:(NSUserActivity *)userActivity
     if (@available(iOS 13.0, *)) {
         if (tagSession != nil) {
             NSLog(@"NfcManager restarting polling");
-            [self->tagSession restartPolling];
+            // Settle the previous callback before overwriting it — otherwise it
+            // leaks forever and its promise never settles.
+            RCTResponseSenderBlock pending = techRequestCallback;
             techRequestCallback = callback;
+            if (pending && pending != callback) {
+                pending(@[@"restarted", [NSNull null]]);
+            }
+            [self->tagSession restartPolling];
         } else {
             callback(@[@"No active registration", [NSNull null]]);
         }
@@ -326,10 +332,20 @@ continueUserActivity:(NSUserActivity *)userActivity
 {
     if (@available(iOS 13.0, *)) {
         if (tagSession != nil) {
+            // Settle any pending requestTechnology callback exactly once before
+            // tearing the session down. Without this, the original JS promise
+            // either hangs or gets settled later by didInvalidateWithError
+            // racing the cancellation (fatal double-settle under TurboModules).
+            RCTResponseSenderBlock pending = techRequestCallback;
+            techRequestCallback = nil;
             [tagSession invalidateSession];
             tagSession = nil;
+            if (pending) {
+                pending(@[@"cancelled", [NSNull null]]);
+            }
             callback(@[]);
         } else {
+            techRequestCallback = nil;
             callback(@[@"Not even registered", [NSNull null]]);
         }
     } else {
@@ -377,12 +393,21 @@ continueUserActivity:(NSUserActivity *)userActivity
             session = nil;
             callback(@[]);
         } else if (tagSession != nil) {
+            // Also settle a pending technology request so its promise never hangs.
+            RCTResponseSenderBlock pending = techRequestCallback;
+            techRequestCallback = nil;
             [tagSession invalidateSession];
             tagSession = nil;
+            if (pending) {
+                pending(@[@"session invalidated", [NSNull null]]);
+            }
             callback(@[]);
         } else {
             callback(@[@"No active session", [NSNull null]]);
         }
+    } else {
+        // Always respond — an unanswered callback leaves the JS promise pending forever.
+        callback(@[@"Not support in this device", [NSNull null]]);
     }
 }
 
