@@ -1,0 +1,3 @@
+# Line endings: LF in the repository, regardless of contributor platform.
+# Prevents Windows checkouts from producing whole-file CRLF diffs.
+* text=auto eol=lf
