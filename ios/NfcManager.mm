@@ -209,8 +209,8 @@ continueUserActivity:(NSUserActivity *)userActivity
                             if (pendingCallback) {
                                 pendingCallback(@[getErrorMessage(error)]);
                             }
-                            // Restart polling only while the session is still valid.
-                            if (self->tagSession != nil && self->tagSession.valid) {
+                            // Restart polling only while the session is still ready.
+                            if (self->tagSession != nil && self->tagSession.ready) {
                                 NSLog(@"NFCTag restarting polling");
                                 [self->tagSession restartPolling];
                             }
